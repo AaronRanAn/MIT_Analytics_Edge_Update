@@ -6,9 +6,9 @@ library(ggplot2)
 library(ggthemes)
 library(magrittr)
 library(ROCR)
+library(tidyr)
+library(mice)
 library(caTools)
-
-
 
 #################### Part 1: song popularity 
 
@@ -156,6 +156,127 @@ vio_pred_obj = prediction(prl_test$pred_vio, prl_test$violator)
 performance(vio_pred_obj, "auc")@y.values # performance return S4 object 
 
 # check this out: http://mlwiki.org/index.php/ROC_Analysis#AUC:_Area_Under_ROC_Curve
+
+#################### Part 3: Lending Club 
+
+loan = read_csv("../../data/week 3/loans.csv")
+
+loan %>% 
+        count(not.fully.paid) %$%
+        prop.table(n)
+
+loan %>% 
+        summarise_each(funs(na_cnt = sum(is.na(.)))) %>% 
+        gather("var_name", "na_cnt", 1:ncol(loan)) %>% 
+        arrange(desc(na_cnt))
+
+loan %>% 
+        rowwise() %>% 
+        mutate(na_check = apply(., 2, function(x) sum(is.na(x)))) %>% View()
+
+
+loan %>% 
+        filter(complete.cases(.)) %>% dim()
+
+## imputation
+
+
+library(mice)
+set.seed(144)
+
+vars.for.imputation = setdiff(names(loan), "not.fully.paid")
+imputed = complete(mice(loan[vars.for.imputation]))
+loan[vars.for.imputation] = imputed
+
+# Split train and test
+
+set.seed(144)
+split = sample.split(loan$not.fully.paid, SplitRatio = 0.7)
+loan_train = subset(loan, split == TRUE)
+loan_test = subset(loan, split == FALSE)
+
+loan_train %>% 
+        glm(not.fully.paid ~., ., family="binomial") -> loan_log_1
+
+# O(a)/O(b) = exp(logit(a)-logit(b))
+
+loan_test %<>% 
+        mutate(pred_notfully = predict(loan_log_1, ., type="response"), 
+               pred_class = ifelse(pred_notfully > 0.5, 1,0), 
+               pred_check = pred_class == not.fully.paid
+        )
+
+loan_test %>% 
+        count(not.fully.paid, pred_class)
+
+# not.fully.paid      pred_class n
+# (int)      (dbl)             (int)
+# 1              0          0  2400
+# 2              0          1    13
+# 3              1          0   457
+# 4              1          1     3
+
+accuracy = (2400+3) / (2400+13+457+3) # 0.8364079
+
+accu_base = (2400) / (2400+13+457+3)
+
+loan_pred_obj = prediction(loan_test$pred_notfully, loan_test$not.fully.paid)
+
+performance(loan_pred_obj, "auc")@y.values # performance return S4 object 
+
+## Smart baseline 
+
+loan_train %>% 
+        glm(not.fully.paid ~ int.rate, ., family="binomial") -> loan_log_0
+
+loan_test %<>% 
+        mutate(pred_notfully_0 = predict(loan_log_0, ., type="response"), 
+               pred_class_0 = ifelse(pred_notfully_0 > 0.5, 1,0), 
+               pred_check_0 = pred_class_0 == not.fully.paid
+        )
+
+max(exp(loan_test$pred_notfully_0)/(1+exp(loan_test$pred_notfully_0)))
+
+max(loan_test$pred_notfully_0)
+
+loan_test %>% 
+        count(not.fully.paid, pred_class_0)
+
+loan_pred_obj_0 = prediction(loan_test$pred_notfully_0, loan_test$not.fully.paid)
+
+performance(loan_pred_obj_0, "auc")@y.values # performance return S4 object 
+
+
+### investment
+
+10 * exp(0.06*3)
+
+loan_test$profit = exp(loan_test$int.rate*3) - 1
+
+loan_test$profit[loan_test$not.fully.paid == 1] = -1
+
+max(loan_test$profit)*10
+
+loan_test %>% 
+        filter(int.rate>=0.15) %$% 
+        mean(profit)
+
+loan_test %>% 
+        filter(int.rate>=0.15) %>% 
+        count(not.fully.paid)
+
+max(loan_test$pred_notfully)
+
+loan_test %>% 
+        filter(int.rate>=0.15) %>% 
+        arrange(pred_notfully) %>% 
+        head(100) %>%
+        # sum(profit)
+        count(not.fully.paid)
+        
+
+
+
 
 
 
