@@ -30,9 +30,30 @@ rat %>%
         summarise(mean = mean(WEIGHTGAIN), 
                   std = sd(WEIGHTGAIN))
 
-library(lubridate)
 
-ymd("2016-01-04") - ymd("2014-08-17")
+# -----------------------------
+# ------ Quiz 3: Regression ---
+# -----------------------------
 
-ymd("2014-08-17") + days(127)
-201
+df = data.frame(x=c(20,11,15,10,17,19), y=c(5,15,14,17,8,9))
+
+lm(y~x, df)
+
+library(caret)
+
+data(cars)
+
+fit_0 <- lm(formula = cars$Price ~ cars$Mileage + cars$convertible, data = cars)
+
+fit_1 <- lm(formula = cars$Price ~ cars$Mileage * cars$Cylinder * cars$convertible,
+            data = cars)
+
+summary(fit_1)
+
+fit_2 <- lm(formula = cars$Price ~ ., data = cars) 
+
+summary(fit_2)
+
+cor(cars$coupe, cars$sedan)
+
+summary(lm(cars$Price ~ ., data=cars))
